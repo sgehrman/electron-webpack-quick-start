@@ -1,2 +1,112 @@
 // Initial welcome page. Delete the following line to remove it.
-'use strict';const styles=document.createElement('style');styles.innerText=`@import url(https://unpkg.com/spectre.css/dist/spectre.min.css);.empty{display:flex;flex-direction:column;justify-content:center;height:100vh;position:relative}.footer{bottom:0;font-size:13px;left:50%;opacity:.9;position:absolute;transform:translateX(-50%);width:100%}`;const vueScript=document.createElement('script');vueScript.setAttribute('type','text/javascript'),vueScript.setAttribute('src','https://unpkg.com/vue'),vueScript.onload=init,document.head.appendChild(vueScript),document.head.appendChild(styles);function init(){Vue.config.devtools=false,Vue.config.productionTip=false,new Vue({data:{versions:{electron:process.versions.electron,electronWebpack:require('electron-webpack/package.json').version}},methods:{open(b){require('electron').shell.openExternal(b)}},template:`<div><div class=empty><p class="empty-title h5">Welcome to your new project!<p class=empty-subtitle>Get started now and take advantage of the great documentation at hand.<div class=empty-action><button @click="open('https://webpack.electron.build')"class="btn btn-primary">Documentation</button> <button @click="open('https://electron.atom.io/docs/')"class="btn btn-primary">Electron</button><br><ul class=breadcrumb><li class=breadcrumb-item>electron-webpack v{{ versions.electronWebpack }}</li><li class=breadcrumb-item>electron v{{ versions.electron }}</li></ul></div><p class=footer>This intitial landing page can be easily removed from <code>src/renderer/index.js</code>.</p></div></div>`}).$mount('#app')}
+'use strict';
+const vueScript = document.createElement('script');
+vueScript.setAttribute('type', 'text/javascript'), vueScript.setAttribute('src', 'https://unpkg.com/vue'), vueScript.onload = init, document.head.appendChild(vueScript);
+
+var Transport = require('@ledgerhq/hw-transport-node-hid').default;
+var Str = require('@ledgerhq/hw-app-str').default;
+var StellarSdk = require('stellar-sdk');
+
+function init() {
+  Vue.config.devtools = false, Vue.config.productionTip = false, new Vue({
+    data() {
+      return {
+        transport: null,
+        str: null,
+        publicKey: null
+      }
+    },
+    methods: {
+      doConnect() {
+        debugger;
+        return Transport.create(180000)
+          .then((t) => {
+            this.transport = t;
+            this.transport.setDebugMode(true);
+            this.str = new Str(transport);
+          })
+          .catch((error) => {
+            console.log(JSON.stringify(error));
+          });
+      },
+
+      connect() {
+        if (this.str) {
+          return this.str.getAppConfiguration()
+            .catch(() => {
+              this.transport.close();
+              this.str = null;
+              return this.doConnect();
+            });
+        } else {
+          return this.doConnect();
+        }
+      },
+
+      getPublicKey() {
+        this.connect()
+          .then(() => {
+            this.str.getPublicKey("44'/148'/0'")
+              .then((result) => {
+                publicKey = result.publicKey;
+                console.log(publicKey);
+              });
+          })
+          .catch(() => {
+            console.log('error connecting');
+          });
+      },
+
+      loadAccount(publicKey) {
+        const server = new StellarSdk.Server('https://horizon-testnet.stellar.org');
+        return server.loadAccount(publicKey);
+      },
+
+      inflation(account) {
+        return new StellarSdk.TransactionBuilder(account)
+          .addOperation(StellarSdk.Operation.inflation())
+          .addMemo(StellarSdk.Memo.text("maximum memo length 28 chars"))
+          .build();
+      },
+
+      signTx() {
+        this.connect().then(() => {
+          this.loadAccount(publicKey).then((account) => {
+            StellarSdk.Network.useTestNetwork();
+            const tx = inflation(account);
+            console.log('signing transaction');
+            try {
+              this.str.signTransaction("44'/148'/0'", tx.signatureBase()).then((s) => {
+                const txHash = tx.hash();
+                const keyPair = StellarSdk.Keypair.fromPublicKey(publicKey);
+                if (keyPair.verify(txHash, s['signature'])) {
+                  console.log('Success! Good signature');
+                } else {
+                  console.error('Failure: Bad signature');
+                }
+              });
+            } catch (e) {
+              console.log(e);
+            }
+          });
+        }).catch(() => {
+          console.log('error connecting');
+        });
+      }
+    },
+    template: `<div>
+    <h1>Hello World!</h1>
+    <div>&nbsp;</div>
+    <div id="addressForm">
+      <input type="text" id="bip32Path" value="44'/148'/0'">
+      <input id='getPublicKey' type="button" @click="getPublicKey()" value="Get Public Key">
+      <!--<input id='confirmPublicKey' type="button" onClick="getPublicKey(true)" value="Confirm Public Key">-->
+    </div>
+    <div>&nbsp;</div>
+    <div id="signForm">
+      <input id='signTx' type="button" @click="signTx()" value="Sign">
+      </div>
+      </div>
+    `
+  }).$mount('#app')
+}
