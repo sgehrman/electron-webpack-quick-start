@@ -50,8 +50,8 @@ function init() {
           .then(() => {
             this.str.getPublicKey("44'/148'/0'")
               .then((result) => {
-                const publicKey = result.publicKey
-                console.log(publicKey)
+                this.publicKey = result.publicKey
+                console.log(this.publicKey)
               })
           })
           .catch(() => {
@@ -69,28 +69,31 @@ function init() {
           .build()
       },
       signTx() {
-        this.connect().then(() => {
-          this.loadAccount(this.publicKey).then((account) => {
-            StellarSdk.Network.useTestNetwork()
-            const tx = this.inflation(account)
-            console.log('signing transaction')
-            try {
-              this.str.signTransaction("44'/148'/0'", tx.signatureBase()).then((s) => {
-                const txHash = tx.hash()
-                const keyPair = StellarSdk.Keypair.fromPublicKey(this.publicKey)
-                if (keyPair.verify(txHash, s['signature'])) {
-                  console.log('Success! Good signature')
-                } else {
-                  console.error('Failure: Bad signature')
+        this.connect()
+          .then(() => {
+            this.loadAccount(this.publicKey)
+              .then((account) => {
+                StellarSdk.Network.useTestNetwork()
+                const tx = this.inflation(account)
+                console.log('signing transaction')
+                try {
+                  this.str.signTransaction("44'/148'/0'", tx.signatureBase())
+                    .then((s) => {
+                      const txHash = tx.hash()
+                      const keyPair = StellarSdk.Keypair.fromPublicKey(this.publicKey)
+                      if (keyPair.verify(txHash, s['signature'])) {
+                        console.log('Success! Good signature')
+                      } else {
+                        console.error('Failure: Bad signature')
+                      }
+                    })
+                } catch (e) {
+                  console.log(e)
                 }
               })
-            } catch (e) {
-              console.log(e)
-            }
+          }).catch((error) => {
+            console.log(JSON.stringify(error))
           })
-        }).catch(() => {
-          console.log('error connecting')
-        })
       }
     },
     template: `<div>
