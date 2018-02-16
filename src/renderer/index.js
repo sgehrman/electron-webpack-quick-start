@@ -18,7 +18,6 @@ function init() {
     },
     methods: {
       doConnect() {
-        debugger;
         return Transport.create(180000)
           .then((t) => {
             this.transport = t;
